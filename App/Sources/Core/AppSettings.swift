@@ -69,7 +69,13 @@ final class AppSettings {
         customLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.customLayout)
         savedNormalLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.savedNormal)
         var apps = Self.load([WatchedApp].self, defaults: defaults, key: Keys.watchedApps) ?? []
-        // Built-in games are always listed (new ones appear after an update).
+        // Built-in games always come from the code (only the switch is saved), and
+        // new ones appear after an update.
+        apps = apps.map { saved in
+            guard var builtIn = WatchedApp.defaults.first(where: { $0.id == saved.id }) else { return saved }
+            builtIn.isEnabled = saved.isEnabled
+            return builtIn
+        }
         for builtIn in WatchedApp.defaults.reversed() where !apps.contains(where: { $0.id == builtIn.id }) {
             apps.insert(builtIn, at: 0)
         }
