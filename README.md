@@ -49,7 +49,7 @@ Or install manually:
 2. Open it and drag **GameEdge** to Applications.
 3. Open GameEdge. It lives in the menu bar (🎮) and opens at login.
 
-No permissions are needed. The app is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. It updates itself: it looks for a new version at launch and once a day, and asks before installing it. Choose **Check for Updates…** in the menu bar, or turn on automatic installs in **General › Updates**.
+The display layout, ⌥Tab and the rest need no permissions. **Full resolution in Windowed mode** asks once for **Accessibility** (to move the game window) and **Screen Recording** (to show it); without them the game simply stays in its window. The app is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. It updates itself: it looks for a new version at launch and once a day, and asks before installing it. Choose **Check for Updates…** in the menu bar, or turn on automatic installs in **General › Updates**.
 
 **Requirements:** macOS 14 Sonoma or later, Apple silicon or Intel. On macOS 14 and 15 everything works the same; buttons use the standard style instead of Liquid Glass, which needs macOS 26.
 
@@ -57,8 +57,11 @@ To update through Homebrew instead, run `brew update` followed by `brew upgrade 
 
 ## Features
 
+- **Full resolution in Windowed mode** (the recommended way to play): set League of Legends to *Windowed* at your display's resolution. GameEdge runs the game on an invisible extra display a little taller than yours, so it renders at full resolution, and shows its picture live on the main display without the title bar: a true 2560×1440, 16:9 picture that, unlike *Borderless*, **stays visible when you switch apps**. While you play the cursor lives on that invisible display, which touches the others only at a corner, so it can't slip out; when you leave the game it comes back to the same point of the main display, and clicking the picture takes you back. The picture adds about one frame of delay.
 - **Automatic**: when a League of Legends match starts, the displays beside the game display move up into its corners. When the match ends, they go back. The client and lobby don't count, only the match.
 - **⌘Tab works like on Windows**: switch to another app and the displays go back side by side, so the cursor moves freely while the game keeps running. Return to the game and its layout comes back, with the cursor on the game display.
+- **⌥Tab works like ⌘Tab** while a game runs, like Alt+Tab on Windows: from the game to the app you used last, and back.
+- **Menu bar and Dock hidden** while a game runs, and given back afterwards exactly as they were. In plain Windowed mode, black bands cover the window's title bar.
 - **No giant pointer**: moving the mouse fast in a game no longer triggers macOS *Shake mouse pointer to locate*. GameEdge turns it off while you play and back on afterwards, even after a crash.
 - **Any game**: add other apps in **Games**. GameEdge recognises them even when their launcher starts them outside Launch Services.
 - **Custom layout**: arrange the displays in System Settings › Displays the way you want to play, then **Save Current Arrangement**.
@@ -66,7 +69,7 @@ To update through Homebrew instead, run `brew update` followed by `brew upgrade 
 - **Manual mode**: **Use Game Layout Now** from the menu bar, for a game GameEdge doesn't watch.
 - **Live preview** of your displays, with the edges where the cursor can still escape drawn in red.
 
-The game display is your main display, the one with the menu bar.
+The game display is your main display, the one with the menu bar. GameEdge never touches the game itself: no injection, no memory access, no changed files, so it's compatible with anti-cheat systems such as Riot Vanguard.
 
 ## Screenshots
 
@@ -77,7 +80,7 @@ The game display is your main display, the one with the menu bar.
 
 ## Privacy
 
-No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts and which app is in front. While you play it turns off *Shake mouse pointer to locate* (Accessibility › Display › Pointer) and turns it back on afterwards. It keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
+No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts and which app is in front. While a game runs it changes, and then restores exactly as they were, *Shake mouse pointer to locate* (Accessibility › Display › Pointer) and the automatic hiding of the menu bar and the Dock. With full resolution in Windowed mode it captures the game window with ScreenCaptureKit only to draw it on your main display: nothing is recorded, saved or sent anywhere. It keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
 
 ## Build from source
 

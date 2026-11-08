@@ -23,7 +23,10 @@ final class GameMirror {
 
     /// The extra height that leaves room for the virtual display's menu bar and the game's title bar.
     private static let extraHeight = 160
-    private let titleBar: CGFloat = 32
+    /// Height of a standard title bar on this macOS (28 pt before macOS 26, 32 pt since).
+    private let titleBar = NSWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+                                              styleMask: [.titled, .closable, .miniaturizable]).height - 100
+    private var mainDisplay: CGDirectDisplayID = 0
 
     private(set) var isRunning = false
     private var game: NSRunningApplication?
@@ -36,10 +39,15 @@ final class GameMirror {
     private var timer: Timer?
     private var content: CGRect?
     private var didAskForAccessibility = false
+    private var didAskForScreenRecording = false
 
     // MARK: Permissions
 
     static var hasAccessibility: Bool { AXIsProcessTrusted() }
+
+    static var hasScreenRecording: Bool { CGPreflightScreenCaptureAccess() }
+
+    static var hasPermissions: Bool { hasAccessibility && hasScreenRecording }
 
     static func requestAccessibility() {
         // kAXTrustedCheckOptionPrompt
@@ -62,6 +70,7 @@ final class GameMirror {
 
     func start(game: NSRunningApplication) {
         guard !isRunning else { return }
+        // Without both permissions the game simply stays where it is (Windowed, with the black bands).
         guard Self.hasAccessibility else {
             if !didAskForAccessibility {
                 didAskForAccessibility = true
@@ -70,10 +79,21 @@ final class GameMirror {
             }
             return
         }
+        guard Self.hasScreenRecording else {
+            if !didAskForScreenRecording {
+                didAskForScreenRecording = true
+                Log.write("full resolution: Screen Recording access needed to show the game")
+                CGRequestScreenCaptureAccess()
+            }
+            return
+        }
         let main = CGMainDisplayID()
-        let bounds = CGDisplayBounds(main)
-        let refresh = CGDisplayCopyDisplayMode(main)?.refreshRate ?? 60
-        let width = UInt32(bounds.width), height = UInt32(bounds.height) + UInt32(Self.extraHeight)
+        guard let mode = CGDisplayCopyDisplayMode(main) else { return }
+        // Pixels, so Retina displays get the game at their native resolution.
+        let width = UInt32(max(mode.pixelWidth, mode.width))
+        let height = UInt32(max(mode.pixelHeight, mode.height) + Self.extraHeight)
+        let refresh = Self.refreshRate(of: main, mode: mode)
+        mainDisplay = main
 
         let descriptor = CGVirtualDisplayDescriptor()
         descriptor.setDispatchQueue(DispatchQueue.main)
@@ -91,7 +111,7 @@ final class GameMirror {
         }
         let settings = CGVirtualDisplaySettings()
         settings.hiDPI = 0
-        settings.modes = [CGVirtualDisplayMode(width: width, height: height, refreshRate: refresh > 0 ? refresh : 60)]
+        settings.modes = [CGVirtualDisplayMode(width: width, height: height, refreshRate: refresh)]
         guard display.apply(settings) else {
             Log.write("full resolution: the virtual display refused its mode")
             return
@@ -169,8 +189,25 @@ final class GameMirror {
 
     // MARK: Upkeep
 
+    /// ProMotion and some built-in displays report 0 Hz: ask the screen instead.
+    private static func refreshRate(of display: CGDirectDisplayID, mode: CGDisplayMode) -> Double {
+        if mode.refreshRate > 0 { return mode.refreshRate }
+        let screen = NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
+        }
+        let fps = screen?.maximumFramesPerSecond ?? 60
+        return Double(fps > 0 ? fps : 60)
+    }
+
     private func tick() {
         guard isRunning, let game, !game.isTerminated else { return }
+        // A different main display (plugged, unplugged, rearranged): start over on the new one.
+        guard CGMainDisplayID() == mainDisplay else {
+            Log.write("full resolution: the main display changed")
+            stop()
+            GameMode.shared.refresh()
+            return
+        }
         placeVirtualDisplay()
         moveGameWindowToVirtualDisplay()
         Task { await updateCapture() }
@@ -179,11 +216,9 @@ final class GameMirror {
     /// Keeps the virtual display touching the arrangement only at a corner,
     /// below the bottom-left display, so the cursor can't wander in or out.
     private func placeVirtualDisplay() {
-        let physical = Displays.online().map(\.frame)
-        guard let anchor = physical.max(by: { ($0.maxY, -$0.minX) < ($1.maxY, -$1.minX) }) else { return }
         let size = CGDisplayBounds(virtualID).size
-        let target = CGPoint(x: anchor.minX - size.width, y: anchor.maxY)
-        guard CGDisplayBounds(virtualID).origin != target else { return }
+        guard size.width > 0, let target = Geometry.cornerOrigin(for: size, beside: Displays.online().map(\.frame)),
+              CGDisplayBounds(virtualID).origin != target else { return }
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let config else { return }
         CGConfigureDisplayOrigin(config, virtualID, Int32(target.x), Int32(target.y))
@@ -204,9 +239,21 @@ final class GameMirror {
     }
 
     private func updateCapture() async {
-        guard isRunning, let game,
-              let shareable = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false),
-              let window = shareable.windows
+        guard isRunning, let game else { return }
+        let shareable: SCShareableContent
+        do {
+            shareable = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        } catch {
+            if !didAskForScreenRecording {
+                didAskForScreenRecording = true
+                Log.write("full resolution: Screen Recording access needed (\(error.localizedDescription))")
+                panel?.mirrorView.showMessage("Allow Screen Recording for GameEdge",
+                                              detail: "System Settings › Privacy & Security › Screen & System Audio Recording, then quit and reopen GameEdge. Click here to go back to the game meanwhile.")
+                CGRequestScreenCaptureAccess()
+            }
+            return
+        }
+        guard let window = shareable.windows
                 .filter({ $0.owningApplication?.processID == game.processIdentifier && $0.windowLayer == 0 })
                 .max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { return }
         guard isRunning, window.frame.size != capturedWindowSize else { return }
@@ -222,6 +269,7 @@ final class GameMirror {
                 self.stream = stream
             }
             capturedWindowSize = window.frame.size
+            panel?.mirrorView.showMessage(nil)
             Log.write("full resolution: showing \(Int(window.frame.width))×\(Int(window.frame.height - titleBar))")
         } catch {
             Log.write("full resolution: capture failed (\(error.localizedDescription)); Screen Recording access may be needed")
@@ -361,6 +409,26 @@ private final class MirrorPanel: NSPanel {
 
 private final class MirrorView: NSView {
     var onClick: (() -> Void)?
+    private var message: NSTextField?
+
+    /// A centred explanation over the black picture (nil hides it).
+    func showMessage(_ title: String?, detail: String = "") {
+        message?.removeFromSuperview()
+        message = nil
+        guard let title else { return }
+        let label = NSTextField(wrappingLabelWithString: detail.isEmpty ? title : title + "\n\n" + detail)
+        label.alignment = .center
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 22, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.widthAnchor.constraint(lessThanOrEqualToConstant: 900),
+        ])
+        message = label
+    }
     override func mouseDown(with event: NSEvent) { onClick?() }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

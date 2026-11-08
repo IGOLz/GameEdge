@@ -51,6 +51,30 @@ struct LayoutChecks {
         let far = ["game": rect(0, 0), "left": rect(-2560, 0), "farLeft": rect(-5120, 0)]
         check(Geometry.gameFrames(from: far, game: "game")["farLeft"] == far["farLeft"], "unrelated displays stay put")
 
+        // The virtual game display touches the arrangement only at a corner, whatever the layout.
+        let virtualSize = CGSize(width: 2560, height: 1600)
+        let layouts: [String: [CGRect]] = [
+            "single": [rect(0, 0)],
+            "side by side": [rect(0, 0), rect(-2560, 0), rect(2560, 0)],
+            "game layout": [rect(0, 0), rect(-2560, -1440), rect(2560, -1440)],
+            "stacked": [rect(0, 0), rect(0, -1440)],
+            "laptop below": [rect(0, 0), rect(524, 1440, 1512, 982)],
+            "uneven bottoms": [rect(0, 0), rect(-1920, 360, 1920, 1080), rect(2560, -200, 1440, 2560)],
+            "retina and 4K": [rect(0, 0, 1512, 982), rect(1512, -1178, 3840, 2160)],
+        ]
+        for (name, displays) in layouts {
+            guard let origin = Geometry.cornerOrigin(for: virtualSize, beside: displays) else {
+                check(false, "\(name): no corner found"); continue
+            }
+            let virtual = CGRect(origin: origin, size: virtualSize)
+            check(displays.allSatisfy { $0.intersection(virtual).width <= 0 || $0.intersection(virtual).height <= 0 },
+                  "\(name): the virtual display doesn't overlap")
+            check(displays.allSatisfy { Geometry.openEdge(of: $0, with: virtual, uuid: "v") == nil },
+                  "\(name): the virtual display shares no edge")
+            check(displays.contains { $0.minX == virtual.maxX && $0.maxY == virtual.minY },
+                  "\(name): the virtual display touches a corner")
+        }
+
         // Arrangement round trip.
         let arrangement = Arrangement(mainUUID: "game", frames: game)
         let sizes = game.mapValues(\.size)

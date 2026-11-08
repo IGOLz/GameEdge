@@ -342,6 +342,17 @@ struct GeneralView: View {
                           subtitle: "Runs a windowed game at the display's full resolution on an invisible extra display and shows it on the main one without its title bar, so the picture keeps the right shape and stays live when you switch apps. Needs Accessibility and Screen Recording access.",
                           isOn: Binding(get: { settings.fullResolutionWindowed },
                                         set: { settings.fullResolutionWindowed = $0; GameMode.shared.refresh() }))
+                if settings.fullResolutionWindowed, !GameMirror.hasScreenRecording {
+                    RowDivider()
+                    SettingRow(symbol: "record.circle", color: .red, title: "Screen Recording access needed",
+                               subtitle: "To show the game on the main display. Quit and reopen GameEdge after allowing it.") {
+                        Button("Grant Access…") {
+                            CGRequestScreenCaptureAccess()
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                        }
+                        .glassButtonStyle()
+                    }
+                }
                 if settings.fullResolutionWindowed, !GameMirror.hasAccessibility {
                     RowDivider()
                     SettingRow(symbol: "hand.raised.fill", color: .orange, title: "Accessibility access needed",

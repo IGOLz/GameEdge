@@ -85,6 +85,14 @@ nonisolated enum Geometry {
         }
     }
 
+    /// Where a display of `size` touches `displays` only at a single corner:
+    /// below and to the left of the lowest (then leftmost) display. Nothing
+    /// lies lower than that display, so no edge is ever shared.
+    static func cornerOrigin(for size: CGSize, beside displays: [CGRect]) -> CGPoint? {
+        guard let anchor = displays.max(by: { ($0.maxY, -$0.minX) < ($1.maxY, -$1.minX) }) else { return nil }
+        return CGPoint(x: anchor.minX - size.width, y: anchor.maxY)
+    }
+
     /// The automatic game layout: every display that shares a side with the
     /// game display moves into the nearest free diagonal, so it touches the
     /// game display only at a corner. Other displays stay where they are.
