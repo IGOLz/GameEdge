@@ -82,6 +82,10 @@ enum GameDetector {
         return running.contains(where: \.isActive)
     }
 
+    static func runningApplication(for app: WatchedApp) -> NSRunningApplication? {
+        NSWorkspace.shared.runningApplications.first { matches($0, app) }
+    }
+
     private static func matches(_ running: NSRunningApplication, _ app: WatchedApp) -> Bool {
         running.bundleIdentifier == app.id || (running.executableURL.map { app.matches(executablePath: $0.path) } ?? false)
     }

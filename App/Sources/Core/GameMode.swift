@@ -42,6 +42,8 @@ final class GameMode {
     @ObservationIgnored private var started = false
     /// Where the cursor was in the game when you switched away.
     @ObservationIgnored private var cursorInGame: CGPoint?
+    /// The app you used last before the game, for ⌥Tab.
+    @ObservationIgnored private var lastOtherApp: NSRunningApplication?
 
     var isActive: Bool { settings.savedNormalLayout != nil }
 
@@ -62,12 +64,16 @@ final class GameMode {
         #endif
         let center = NSWorkspace.shared.notificationCenter
         // Activation: ⌘Tab in and out of the game.
-        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification,
-                     NSWorkspace.didActivateApplicationNotification] {
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated { GameMode.shared.refresh() }
             }
         }
+        center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { GameMode.shared.noteActivated(app) }
+        }
+        AltTab.shared.onPress = { GameMode.shared.altTabPressed() }
         // Some games start from their launcher without Launch Services: poll too.
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
             MainActor.assumeIsolated { GameMode.shared.refresh() }
@@ -82,6 +88,8 @@ final class GameMode {
     /// Restores the normal layout before quitting.
     func stop() {
         if isActive { restoreNormalLayout(reason: "GameEdge quit") }
+        WindowedGameBands.shared.follow(nil)
+        restoreScreenChrome()
     }
 
     func refresh() {
@@ -116,6 +124,78 @@ final class GameMode {
         }
         // Follows the setting while the game layout is on.
         if isActive, settings.disableShakeToLocate { suppressShakeToLocate() } else { restoreShakeToLocate() }
+        // For as long as the game runs, whichever app is in front.
+        let playing = game != nil && settings.automaticSwitching
+        if playing, settings.fillScreenInWindowedMode {
+            hideScreenChrome()
+            WindowedGameBands.shared.follow(game.flatMap(GameDetector.runningApplication(for:)))
+        } else {
+            WindowedGameBands.shared.follow(nil)
+            restoreScreenChrome()
+        }
+        AltTab.shared.setEnabled(playing && settings.altTabSwitches)
+    }
+
+    // MARK: ⌥Tab
+
+    private func noteActivated(_ app: NSRunningApplication?) {
+        if let app, app != NSRunningApplication.current,
+           !(runningGame.map { GameDetector.runningApplication(for: $0) == app } ?? false) {
+            lastOtherApp = app
+        }
+        refresh()
+    }
+
+    /// From the game to the app you used last, or back to the game.
+    func altTabPressed() {
+        guard let game = runningGame, let gameApp = GameDetector.runningApplication(for: game) else { return }
+        if gameApp.isActive {
+            let target = lastOtherApp.flatMap { $0.isTerminated ? nil : $0 }
+                ?? NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
+            if let target { bringToFront(target) }
+        } else {
+            bringToFront(gameApp)
+        }
+    }
+
+    private func bringToFront(_ app: NSRunningApplication) {
+        if app.activate(options: []) { return }
+        // macOS can decline activation requested by a background app: ask Launch Services instead.
+        guard let url = app.bundleURL else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    // MARK: Menu bar and Dock
+
+    private func hideScreenChrome() {
+        #if DEBUG
+        if DebugUI.usesSampleDisplays { return }
+        #endif
+        if !settings.menuBarNeedsRestore, !ScreenChrome.menuBarAutoHides {
+            ScreenChrome.setMenuBarAutoHides(true)
+            settings.menuBarNeedsRestore = true
+            Log.write("menu bar hidden")
+        }
+        if !settings.dockNeedsRestore, ScreenChrome.canChangeDock, !ScreenChrome.dockAutoHides {
+            ScreenChrome.setDockAutoHides(true)
+            settings.dockNeedsRestore = true
+            Log.write("Dock hidden")
+        }
+    }
+
+    private func restoreScreenChrome() {
+        if settings.menuBarNeedsRestore {
+            ScreenChrome.setMenuBarAutoHides(false)
+            settings.menuBarNeedsRestore = false
+            Log.write("menu bar shown again")
+        }
+        if settings.dockNeedsRestore {
+            ScreenChrome.setDockAutoHides(false)
+            settings.dockNeedsRestore = false
+            Log.write("Dock shown again")
+        }
     }
 
     func displaysChanged() {

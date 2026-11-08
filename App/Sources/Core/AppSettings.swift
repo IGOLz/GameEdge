@@ -28,6 +28,25 @@ final class AppSettings {
         didSet { defaults.set(shakeToLocateNeedsRestore, forKey: Keys.shakeToLocateNeedsRestore) }
     }
 
+    /// Hide the menu bar and Dock while a game runs, and cover a windowed game's title bar.
+    var fillScreenInWindowedMode: Bool {
+        didSet { defaults.set(fillScreenInWindowedMode, forKey: Keys.fillScreenInWindowedMode) }
+    }
+
+    /// ⌥Tab switches between the game and the last app, like Alt+Tab on Windows.
+    var altTabSwitches: Bool {
+        didSet { defaults.set(altTabSwitches, forKey: Keys.altTabSwitches) }
+    }
+
+    /// GameEdge hid the menu bar / the Dock and must show them again (saved, to survive a crash).
+    var menuBarNeedsRestore: Bool {
+        didSet { defaults.set(menuBarNeedsRestore, forKey: Keys.menuBarNeedsRestore) }
+    }
+
+    var dockNeedsRestore: Bool {
+        didSet { defaults.set(dockNeedsRestore, forKey: Keys.dockNeedsRestore) }
+    }
+
     var watchedApps: [WatchedApp] {
         didSet { save(watchedApps, forKey: Keys.watchedApps) }
     }
@@ -56,15 +75,24 @@ final class AppSettings {
         static let freeCursorOutsideGame = "freeCursorOutsideGame"
         static let disableShakeToLocate = "disableShakeToLocate"
         static let shakeToLocateNeedsRestore = "shakeToLocateNeedsRestore"
+        static let fillScreenInWindowedMode = "fillScreenInWindowedMode"
+        static let altTabSwitches = "altTabSwitches"
+        static let menuBarNeedsRestore = "menuBarNeedsRestore"
+        static let dockNeedsRestore = "dockNeedsRestore"
     }
 
     private init() {
         defaults.register(defaults: [Keys.automaticSwitching: true, Keys.freeCursorOutsideGame: true,
-                                     Keys.disableShakeToLocate: true])
+                                     Keys.disableShakeToLocate: true, Keys.fillScreenInWindowedMode: true,
+                                     Keys.altTabSwitches: true])
         automaticSwitching = defaults.bool(forKey: Keys.automaticSwitching)
         freeCursorOutsideGame = defaults.bool(forKey: Keys.freeCursorOutsideGame)
         disableShakeToLocate = defaults.bool(forKey: Keys.disableShakeToLocate)
         shakeToLocateNeedsRestore = defaults.bool(forKey: Keys.shakeToLocateNeedsRestore)
+        fillScreenInWindowedMode = defaults.bool(forKey: Keys.fillScreenInWindowedMode)
+        altTabSwitches = defaults.bool(forKey: Keys.altTabSwitches)
+        menuBarNeedsRestore = defaults.bool(forKey: Keys.menuBarNeedsRestore)
+        dockNeedsRestore = defaults.bool(forKey: Keys.dockNeedsRestore)
         hasLaunchedBefore = defaults.bool(forKey: Keys.didFirstRun)
         customLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.customLayout)
         savedNormalLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.savedNormal)
