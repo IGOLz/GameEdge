@@ -1,0 +1,19 @@
+cask "gameedge" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/IGOLz/GameEdge/releases/download/v#{version}/GameEdge-#{version}.dmg"
+  name "GameEdge"
+  desc "Keeps the cursor inside fullscreen games on multi-display setups"
+  homepage "https://github.com/IGOLz/GameEdge"
+
+  auto_updates true
+  depends_on macos: :sonoma
+
+  app "GameEdge.app"
+
+  zap trash: [
+    "~/Library/Preferences/dev.igol.GameEdge.plist",
+    "~/Library/Logs/GameEdge.log",
+  ]
+end

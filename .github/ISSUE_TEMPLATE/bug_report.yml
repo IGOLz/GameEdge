@@ -1,0 +1,26 @@
+name: 🐛 Bug report
+description: Something in GameEdge isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What you did, and what went wrong. Screenshots are welcome — just drag them here.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: GameEdge version
+      placeholder: "1.0.0"
+
+  - type: input
+    attributes:
+      label: macOS version and Mac
+      placeholder: "macOS 26.1, Mac mini M4"
+
+  - type: textarea
+    attributes:
+      label: Displays and game
+      description: How many displays, how they're arranged, and which game. The log (menu bar › Open Log) helps a lot.
+      placeholder: "Three 1440p displays side by side, League of Legends in Fullscreen on the middle one"

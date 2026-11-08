@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Swift 6.2 features (default MainActor isolation) need Xcode 26 or later.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: brew install xcodegen
+
+      - name: App (universal, unsigned)
+        run: |
+          xcodegen generate
+          xcodebuild -project GameEdge.xcodeproj -scheme GameEdge -configuration Release \
+            -derivedDataPath build/dd -clonedSourcePackagesDirPath build/SourcePackages \
+            ONLY_ACTIVE_ARCH=NO ARCHS="arm64 x86_64" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -20
+          lipo -archs build/dd/Build/Products/Release/GameEdge.app/Contents/MacOS/GameEdge
+
+      - name: Layout checks
+        run: swiftc -O -parse-as-library App/Sources/Core/DisplayLayout.swift Tests/LayoutChecks.swift -o build/layout-checks && build/layout-checks
+
+      - name: Homebrew checks
+        run: python3 -I Tests/HomebrewChecks.py
