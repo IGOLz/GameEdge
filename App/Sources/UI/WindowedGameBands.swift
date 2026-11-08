@@ -14,6 +14,9 @@ final class WindowedGameBands {
     /// Corner radius of standard windows (generous, so no desktop shows through).
     private let cornerRadius: CGFloat = 18
 
+    /// Called with the size of the game picture whenever the bands are shown.
+    var onContentSize: ((CGSize) -> Void)?
+
     private var panels: [BandPanel] = []
     private var timer: Timer?
     private var game: NSRunningApplication?
@@ -49,6 +52,7 @@ final class WindowedGameBands {
         }
         let content = CGRect(x: window.minX, y: window.minY + titleBarHeight,
                              width: window.width, height: window.height - titleBarHeight)
+        onContentSize?(content.size)
         var bands: [CGRect] = []
         if content.minY > display.minY {
             bands.append(CGRect(x: display.minX, y: display.minY, width: display.width, height: content.minY - display.minY))

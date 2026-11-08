@@ -74,6 +74,7 @@ final class GameMode {
             MainActor.assumeIsolated { GameMode.shared.noteActivated(app) }
         }
         AltTab.shared.onPress = { GameMode.shared.altTabPressed() }
+        WindowedGameBands.shared.onContentSize = { GameMode.shared.noteWindowedContentSize($0) }
         // Some games start from their launcher without Launch Services: poll too.
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
             MainActor.assumeIsolated { GameMode.shared.refresh() }
@@ -134,6 +135,53 @@ final class GameMode {
             restoreScreenChrome()
         }
         AltTab.shared.setEnabled(playing && settings.altTabSwitches)
+        // League of Legends reads game.cfg when a match starts: change it only in between.
+        let leagueRunning = game?.id == WatchedApp.leagueOfLegends.id
+        if !leagueRunning, previous?.id == WatchedApp.leagueOfLegends.id || needsLeagueConfigSync {
+            needsLeagueConfigSync = false
+            syncLeagueResolution()
+        }
+    }
+
+    // MARK: League of Legends resolution
+
+    @ObservationIgnored private var needsLeagueConfigSync = true
+
+    /// Asks for game.cfg to be checked again (after a settings change).
+    func leagueSettingsChanged() {
+        needsLeagueConfigSync = true
+        refresh()
+    }
+
+    func noteWindowedContentSize(_ size: CGSize) {
+        guard runningGame?.id == WatchedApp.leagueOfLegends.id, size.width > 0, size.height > 0 else { return }
+        let measured = [Int(size.width.rounded()), Int(size.height.rounded())]
+        if settings.leagueWindowedContentSize != measured {
+            settings.leagueWindowedContentSize = measured
+            Log.write("League of Legends windowed picture: \(measured[0])×\(measured[1])")
+        }
+    }
+
+    /// In Windowed mode with the bands, the game should render at the window's
+    /// real size, or the picture is stretched. Otherwise, your own resolution.
+    private func syncLeagueResolution() {
+        #if DEBUG
+        if DebugUI.usesSampleDisplays { return }
+        #endif
+        guard let config = LeagueConfig.read(), let width = config.width, let height = config.height else { return }
+        if settings.fillScreenInWindowedMode, config.windowMode == LeagueConfig.windowedMode,
+           let wanted = settings.leagueWindowedContentSize, wanted.count == 2 {
+            guard [width, height] != wanted else { return }
+            if settings.leagueOriginalResolution == nil { settings.leagueOriginalResolution = [width, height] }
+            if LeagueConfig.setResolution(width: wanted[0], height: wanted[1]) {
+                Log.write("game.cfg resolution \(width)×\(height) → \(wanted[0])×\(wanted[1]) for Windowed mode")
+            }
+        } else if let original = settings.leagueOriginalResolution, original.count == 2 {
+            if [width, height] != original, LeagueConfig.setResolution(width: original[0], height: original[1]) {
+                Log.write("game.cfg resolution back to \(original[0])×\(original[1])")
+            }
+            settings.leagueOriginalResolution = nil
+        }
     }
 
     // MARK: ⌥Tab
