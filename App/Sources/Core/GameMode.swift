@@ -22,6 +22,8 @@ final class GameMode {
 
     enum Status: Equatable {
         case gameLayout(game: String?)
+        /// The game is running, but you switched to another app: normal layout for now.
+        case cursorFree(game: String)
         case waiting
         case paused
     }
@@ -30,17 +32,22 @@ final class GameMode {
     private(set) var runningGame: WatchedApp?
     /// The game layout was turned on by hand, so it stays on until turned off by hand.
     private(set) var isManual = false
+    /// You left the running game for another app, so the normal layout is back until you return.
+    private(set) var isSuspended = false
     private(set) var events: [Event] = []
     private(set) var lastError: String?
 
     @ObservationIgnored private let settings = AppSettings.shared
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var started = false
+    /// Where the cursor was in the game when you switched away.
+    @ObservationIgnored private var cursorInGame: CGPoint?
 
     var isActive: Bool { settings.savedNormalLayout != nil }
 
     var status: Status {
         if isActive { return .gameLayout(game: isManual ? nil : runningGame?.name) }
+        if isSuspended, let runningGame { return .cursorFree(game: runningGame.name) }
         return settings.automaticSwitching ? .waiting : .paused
     }
 
@@ -54,7 +61,9 @@ final class GameMode {
         if DebugUI.usesSampleDisplays { return }
         #endif
         let center = NSWorkspace.shared.notificationCenter
-        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+        // Activation: ⌘Tab in and out of the game.
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification,
+                     NSWorkspace.didActivateApplicationNotification] {
             center.addObserver(forName: name, object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated { GameMode.shared.refresh() }
             }
@@ -67,6 +76,7 @@ final class GameMode {
         Log.write("started \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "")")
         if isActive { Log.write("a game layout from the previous session is still on") }
         refresh()
+        if !isActive { restoreShakeToLocate() }
     }
 
     /// Restores the normal layout before quitting.
@@ -81,11 +91,31 @@ final class GameMode {
             if let game { Log.write("\(game.name) started") } else if let runningGame { Log.write("\(runningGame.name) quit") }
             runningGame = game
         }
-        if let game, !isActive, settings.automaticSwitching {
-            applyGameLayout(manual: false, reason: "\(game.name) started")
-        } else if game == nil, isActive, !isManual {
-            restoreNormalLayout(reason: previous.map { "\($0.name) quit" } ?? "No game running")
+        if let game, settings.automaticSwitching {
+            let inGame = !settings.freeCursorOutsideGame || (GameDetector.isFrontmost(game) ?? true)
+            if inGame, !isActive {
+                let returning = isSuspended
+                applyGameLayout(manual: false, reason: returning ? "Back in \(game.name)" : "\(game.name) started")
+                if returning, isActive { moveCursorBackIntoGame() }
+                isSuspended = false
+            } else if inGame {
+                isSuspended = false
+            } else if isActive, !isManual {
+                rememberCursorInGame()
+                restoreNormalLayout(reason: "Switched away from \(game.name)")
+                isSuspended = true
+            }
+        } else if game == nil {
+            isSuspended = false
+            cursorInGame = nil
+            if isActive, !isManual {
+                restoreNormalLayout(reason: previous.map { "\($0.name) quit" } ?? "No game running")
+            }
+        } else {
+            isSuspended = false
         }
+        // Follows the setting while the game layout is on.
+        if isActive, settings.disableShakeToLocate { suppressShakeToLocate() } else { restoreShakeToLocate() }
     }
 
     func displaysChanged() {
@@ -167,6 +197,7 @@ final class GameMode {
         switch result {
         case .applied, .unchanged:
             lastError = nil
+            if settings.disableShakeToLocate { suppressShakeToLocate() }
             record("gamecontroller.fill", "\(reason): game layout on")
         case .mainDisplayChanged, .failed:
             settings.savedNormalLayout = nil
@@ -182,12 +213,57 @@ final class GameMode {
         Log.write("normal layout restored (\(reason)): \(result) \(normal.origins)")
         settings.savedNormalLayout = nil
         isManual = false
+        isSuspended = false
+        restoreShakeToLocate()
         if case .failed = result {
             lastError = "macOS didn't accept the normal layout. Rearrange the displays in System Settings › Displays."
         } else {
             lastError = nil
         }
         record("arrow.uturn.backward.circle.fill", "\(reason): normal layout restored")
+    }
+
+    // MARK: Shake to Locate
+
+    private func suppressShakeToLocate() {
+        guard !settings.shakeToLocateNeedsRestore, ShakeToLocate.isEnabled == true else { return }
+        #if DEBUG
+        if DebugUI.usesSampleDisplays { return }
+        #endif
+        if ShakeToLocate.setEnabled(false) {
+            settings.shakeToLocateNeedsRestore = true
+            Log.write("Shake to Locate off")
+        }
+    }
+
+    private func restoreShakeToLocate() {
+        guard settings.shakeToLocateNeedsRestore else { return }
+        ShakeToLocate.setEnabled(true)
+        settings.shakeToLocateNeedsRestore = false
+        Log.write("Shake to Locate back on")
+    }
+
+    // MARK: Cursor
+
+    private var gameDisplayBounds: CGRect { CGDisplayBounds(CGMainDisplayID()) }
+
+    private func rememberCursorInGame() {
+        guard let location = CGEvent(source: nil)?.location, gameDisplayBounds.contains(location) else {
+            cursorInGame = nil
+            return
+        }
+        cursorInGame = location
+    }
+
+    /// Back in the game with the cursor on another display: with the game
+    /// layout on it could only return through a corner, so bring it back.
+    private func moveCursorBackIntoGame() {
+        let bounds = gameDisplayBounds
+        guard let location = CGEvent(source: nil)?.location, !bounds.contains(location) else { return }
+        let target = cursorInGame.flatMap { bounds.contains($0) ? $0 : nil } ?? CGPoint(x: bounds.midX, y: bounds.midY)
+        CGWarpMouseCursorPosition(target)
+        CGAssociateMouseAndMouseCursorPosition(1)
+        Log.write("cursor moved back into the game display")
     }
 
     private func apply(_ arrangement: Arrangement) -> Displays.ApplyResult {

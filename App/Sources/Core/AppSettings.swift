@@ -13,6 +13,21 @@ final class AppSettings {
         didSet { defaults.set(automaticSwitching, forKey: Keys.automaticSwitching) }
     }
 
+    /// Back to the normal layout while you're in another app (⌘Tab), game layout again when you return.
+    var freeCursorOutsideGame: Bool {
+        didSet { defaults.set(freeCursorOutsideGame, forKey: Keys.freeCursorOutsideGame) }
+    }
+
+    /// Turn off "Shake mouse pointer to locate" while the game layout is on.
+    var disableShakeToLocate: Bool {
+        didSet { defaults.set(disableShakeToLocate, forKey: Keys.disableShakeToLocate) }
+    }
+
+    /// GameEdge turned Shake to Locate off and must turn it back on (saved, to survive a crash).
+    var shakeToLocateNeedsRestore: Bool {
+        didSet { defaults.set(shakeToLocateNeedsRestore, forKey: Keys.shakeToLocateNeedsRestore) }
+    }
+
     var watchedApps: [WatchedApp] {
         didSet { save(watchedApps, forKey: Keys.watchedApps) }
     }
@@ -38,11 +53,18 @@ final class AppSettings {
         static let customLayout = "customGaming"
         static let savedNormal = "savedNormal"
         static let didFirstRun = "didFirstRun"
+        static let freeCursorOutsideGame = "freeCursorOutsideGame"
+        static let disableShakeToLocate = "disableShakeToLocate"
+        static let shakeToLocateNeedsRestore = "shakeToLocateNeedsRestore"
     }
 
     private init() {
-        defaults.register(defaults: [Keys.automaticSwitching: true])
+        defaults.register(defaults: [Keys.automaticSwitching: true, Keys.freeCursorOutsideGame: true,
+                                     Keys.disableShakeToLocate: true])
         automaticSwitching = defaults.bool(forKey: Keys.automaticSwitching)
+        freeCursorOutsideGame = defaults.bool(forKey: Keys.freeCursorOutsideGame)
+        disableShakeToLocate = defaults.bool(forKey: Keys.disableShakeToLocate)
+        shakeToLocateNeedsRestore = defaults.bool(forKey: Keys.shakeToLocateNeedsRestore)
         hasLaunchedBefore = defaults.bool(forKey: Keys.didFirstRun)
         customLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.customLayout)
         savedNormalLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.savedNormal)

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// What GameEdge is doing right now, shared by the sidebar, the overview and the menu.
 struct AppStatus {
-    enum Kind { case active, ready, paused, error }
+    enum Kind { case active, free, ready, paused, error }
 
     let kind: Kind
     let title: String
@@ -11,6 +11,7 @@ struct AppStatus {
     var color: Color {
         switch kind {
         case .active: .blue
+        case .free: .teal
         case .ready: .green
         case .paused: .orange
         case .error: .red
@@ -25,6 +26,8 @@ struct AppStatus {
         switch mode.status {
         case .gameLayout(let game):
             return AppStatus(kind: .active, title: "Game layout on", detail: game ?? "Turned on by hand")
+        case .cursorFree(let game):
+            return AppStatus(kind: .free, title: "Cursor free", detail: "\(game) in the background")
         case .waiting:
             return AppStatus(kind: .ready, title: "Ready", detail: "Waiting for a game")
         case .paused:

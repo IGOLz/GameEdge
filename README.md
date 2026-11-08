@@ -58,6 +58,8 @@ To update through Homebrew instead, run `brew update` followed by `brew upgrade 
 ## Features
 
 - **Automatic**: when a League of Legends match starts, the displays beside the game display move up into its corners. When the match ends, they go back. The client and lobby don't count, only the match.
+- **⌘Tab works like on Windows**: switch to another app and the displays go back side by side, so the cursor moves freely while the game keeps running. Return to the game and its layout comes back, with the cursor on the game display.
+- **No giant pointer**: moving the mouse fast in a game no longer triggers macOS *Shake mouse pointer to locate*. GameEdge turns it off while you play and back on afterwards, even after a crash.
 - **Any game**: add other apps in **Games**. GameEdge recognises them even when their launcher starts them outside Launch Services.
 - **Custom layout**: arrange the displays in System Settings › Displays the way you want to play, then **Save Current Arrangement**.
 - **Safe**: the game layout is never saved to disk, so logging out or restarting always brings back your normal arrangement. If GameEdge quits or crashes during a game, it restores the layout the next time it runs.
@@ -75,7 +77,7 @@ The game display is your main display, the one with the menu bar.
 
 ## Privacy
 
-No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts, and keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
+No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts and which app is in front. While you play it turns off *Shake mouse pointer to locate* (Accessibility › Display › Pointer) and turns it back on afterwards. It keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
 
 ## Build from source
 

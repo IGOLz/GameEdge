@@ -69,6 +69,7 @@ struct OverviewView: View {
     private var heroTitle: String {
         switch mode.status {
         case .gameLayout: "Game layout on"
+        case .cursorFree: "Cursor free"
         case .waiting: "Waiting for a game"
         case .paused: "Automatic switching off"
         }
@@ -80,6 +81,8 @@ struct OverviewView: View {
             "\(game) is running. The other displays touch the game display only at a corner, so the cursor stays in the game. Your normal layout comes back when it quits."
         case .gameLayout(nil):
             "Turned on by hand: the game layout stays on until you restore the normal one."
+        case .cursorFree(let game):
+            "You switched away from \(game), so the displays are side by side again and the cursor moves freely. Go back to the game and the game layout returns."
         case .waiting:
             gameNames.isEmpty
                 ? "Choose a game in Games: GameEdge will keep the cursor on its display while it runs."
@@ -320,6 +323,22 @@ struct GeneralView: View {
                           isOn: Binding(get: { login.isEnabled }, set: { login.set($0) }))
             }
             .onAppear { login.refresh() }
+
+            SectionCard(title: "While playing",
+                        footer: ShakeToLocate.isSupported
+                            ? "Shake to Locate is the macOS setting in Accessibility › Display › Pointer. GameEdge turns it back on as soon as the game layout ends, even after a crash."
+                            : "This version of macOS doesn't let GameEdge change Shake to Locate.") {
+                ToggleRow(symbol: "command", color: .indigo, title: "Free the cursor when you leave the game",
+                          subtitle: "Switch to another app with ⌘Tab and the displays go back side by side. Return to the game and its layout comes back. The game keeps running.",
+                          isOn: Binding(get: { settings.freeCursorOutsideGame },
+                                        set: { settings.freeCursorOutsideGame = $0; GameMode.shared.refresh() }))
+                RowDivider()
+                ToggleRow(symbol: "cursorarrow.motionlines", color: .pink, title: "Don't enlarge the pointer",
+                          subtitle: "Turns off Shake to Locate while you play, so fast mouse movements don't make the pointer bigger.",
+                          isOn: Binding(get: { settings.disableShakeToLocate },
+                                        set: { settings.disableShakeToLocate = $0; GameMode.shared.refresh() }))
+                    .disabled(!ShakeToLocate.isSupported)
+            }
 
             SectionCard(title: "Updates",
                         footer: AppUpdater.isEnabled

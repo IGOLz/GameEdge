@@ -59,6 +59,19 @@ enum GameDetector {
         return enabled.first { app in paths.contains { $0.contains(app.executableMarker) } }
     }
 
+    /// Whether `app` is the active app (it gets the keyboard), or nil when
+    /// macOS can't tell: a game running outside Launch Services is never
+    /// reported as active, so it's treated as always in front.
+    static func isFrontmost(_ app: WatchedApp) -> Bool? {
+        let running = NSWorkspace.shared.runningApplications.filter { matches($0, app) }
+        guard !running.isEmpty else { return nil }
+        return running.contains(where: \.isActive)
+    }
+
+    private static func matches(_ running: NSRunningApplication, _ app: WatchedApp) -> Bool {
+        running.bundleIdentifier == app.id || (running.executableURL?.path.contains(app.executableMarker) ?? false)
+    }
+
     private static func processPaths() -> [String] {
         let count = proc_listallpids(nil, 0)
         guard count > 0 else { return [] }
