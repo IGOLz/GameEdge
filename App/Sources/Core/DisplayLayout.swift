@@ -125,6 +125,9 @@ nonisolated enum Displays {
         let isMain: Bool
     }
 
+    /// Displays GameEdge created itself (the virtual game display): never arranged, never shown.
+    nonisolated(unsafe) static var excludedDisplayIDs: Set<CGDirectDisplayID> = []
+
     /// Active displays that aren't mirroring another one.
     static func online() -> [Info] {
         var ids = [CGDirectDisplayID](repeating: 0, count: 32)
@@ -133,6 +136,7 @@ nonisolated enum Displays {
         let main = CGMainDisplayID()
         return ids.prefix(Int(count)).compactMap { id in
             guard CGDisplayIsActive(id) != 0, CGDisplayMirrorsDisplay(id) == kCGNullDirectDisplay,
+                  !excludedDisplayIDs.contains(id),
                   let uuid = uuid(of: id) else { return nil }
             return Info(id: uuid, displayID: id, frame: CGDisplayBounds(id), isMain: id == main)
         }

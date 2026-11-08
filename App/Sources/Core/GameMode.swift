@@ -88,6 +88,7 @@ final class GameMode {
     /// Restores the normal layout before quitting.
     func stop() {
         if isActive { restoreNormalLayout(reason: "GameEdge quit") }
+        GameMirror.shared.stop()
         WindowedGameBands.shared.follow(nil)
         restoreScreenChrome()
     }
@@ -98,6 +99,15 @@ final class GameMode {
         if game?.id != runningGame?.id {
             if let game { Log.write("\(game.name) started") } else if let runningGame { Log.write("\(runningGame.name) quit") }
             runningGame = game
+        }
+        // Full resolution for a game in Windowed mode (virtual display + live picture).
+        let gameApp = game.flatMap(GameDetector.runningApplication(for:))
+        let mirror = GameMirror.shared
+        if let gameApp, settings.automaticSwitching, settings.fullResolutionWindowed,
+           mirror.isRunning || GameMirror.isWindowed(pid: gameApp.processIdentifier) {
+            mirror.start(game: gameApp)
+        } else {
+            mirror.stop()
         }
         if let game, settings.automaticSwitching {
             let inGame = !settings.freeCursorOutsideGame || (GameDetector.isFrontmost(game) ?? true)
@@ -128,7 +138,7 @@ final class GameMode {
         let playing = game != nil && settings.automaticSwitching
         if playing, settings.fillScreenInWindowedMode {
             hideScreenChrome()
-            WindowedGameBands.shared.follow(game.flatMap(GameDetector.runningApplication(for:)))
+            WindowedGameBands.shared.follow(mirror.isRunning ? nil : gameApp)
         } else {
             WindowedGameBands.shared.follow(nil)
             restoreScreenChrome()
@@ -139,9 +149,12 @@ final class GameMode {
     // MARK: ⌥Tab
 
     private func noteActivated(_ app: NSRunningApplication?) {
-        if let app, app != NSRunningApplication.current,
-           !(runningGame.map { GameDetector.runningApplication(for: $0) == app } ?? false) {
+        let isGame = runningGame.map { GameDetector.runningApplication(for: $0) == app } ?? false
+        if let app, app != NSRunningApplication.current, !isGame {
             lastOtherApp = app
+        }
+        if GameMirror.shared.isRunning {
+            if isGame { GameMirror.shared.gameDidActivate() } else if app != NSRunningApplication.current { GameMirror.shared.gameDidDeactivate() }
         }
         refresh()
     }
@@ -248,6 +261,9 @@ final class GameMode {
     }
 
     func gameLayout(for normal: Arrangement) -> Arrangement {
+        // With full resolution the cursor plays on the virtual display, which
+        // already touches the others only at a corner: no need to move them.
+        if GameMirror.shared.isRunning { return normal }
         if let custom = usableCustomLayout { return custom }
         let frames = Geometry.gameFrames(from: frames(of: normal), game: normal.mainUUID)
         return Arrangement(mainUUID: normal.mainUUID, frames: frames)
@@ -338,6 +354,7 @@ final class GameMode {
     /// Back in the game with the cursor on another display: with the game
     /// layout on it could only return through a corner, so bring it back.
     private func moveCursorBackIntoGame() {
+        guard !GameMirror.shared.isRunning else { return }
         let bounds = gameDisplayBounds
         guard let location = CGEvent(source: nil)?.location, !bounds.contains(location) else { return }
         let target = cursorInGame.flatMap { bounds.contains($0) ? $0 : nil } ?? CGPoint(x: bounds.midX, y: bounds.midY)

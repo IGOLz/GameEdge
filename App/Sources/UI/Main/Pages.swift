@@ -338,6 +338,22 @@ struct GeneralView: View {
                           isOn: Binding(get: { settings.altTabSwitches },
                                         set: { settings.altTabSwitches = $0; GameMode.shared.refresh() }))
                 RowDivider()
+                ToggleRow(symbol: "rectangle.inset.filled", color: .blue, title: "Full resolution in Windowed mode",
+                          subtitle: "Runs a windowed game at the display's full resolution on an invisible extra display and shows it on the main one without its title bar, so the picture keeps the right shape and stays live when you switch apps. Needs Accessibility and Screen Recording access.",
+                          isOn: Binding(get: { settings.fullResolutionWindowed },
+                                        set: { settings.fullResolutionWindowed = $0; GameMode.shared.refresh() }))
+                if settings.fullResolutionWindowed, !GameMirror.hasAccessibility {
+                    RowDivider()
+                    SettingRow(symbol: "hand.raised.fill", color: .orange, title: "Accessibility access needed",
+                               subtitle: "To move the game window to the invisible display.") {
+                        Button("Grant Access…") {
+                            GameMirror.requestAccessibility()
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                        .glassButtonStyle()
+                    }
+                }
+                RowDivider()
                 ToggleRow(symbol: "macwindow", color: .teal, title: "Fill the screen in Windowed mode",
                           subtitle: "Hides the menu bar and Dock while a game runs and covers the window's title bar in black. In Windowed mode the game then looks borderless and stays visible when you switch apps.",
                           isOn: Binding(get: { settings.fillScreenInWindowedMode },

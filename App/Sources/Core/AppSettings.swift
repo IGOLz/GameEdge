@@ -33,6 +33,11 @@ final class AppSettings {
         didSet { defaults.set(fillScreenInWindowedMode, forKey: Keys.fillScreenInWindowedMode) }
     }
 
+    /// Windowed games at full resolution through a virtual display (see GameMirror).
+    var fullResolutionWindowed: Bool {
+        didSet { defaults.set(fullResolutionWindowed, forKey: Keys.fullResolutionWindowed) }
+    }
+
     /// ⌥Tab switches between the game and the last app, like Alt+Tab on Windows.
     var altTabSwitches: Bool {
         didSet { defaults.set(altTabSwitches, forKey: Keys.altTabSwitches) }
@@ -77,6 +82,7 @@ final class AppSettings {
         static let shakeToLocateNeedsRestore = "shakeToLocateNeedsRestore"
         static let fillScreenInWindowedMode = "fillScreenInWindowedMode"
         static let altTabSwitches = "altTabSwitches"
+        static let fullResolutionWindowed = "fullResolutionWindowed"
         static let menuBarNeedsRestore = "menuBarNeedsRestore"
         static let dockNeedsRestore = "dockNeedsRestore"
     }
@@ -84,13 +90,14 @@ final class AppSettings {
     private init() {
         defaults.register(defaults: [Keys.automaticSwitching: true, Keys.freeCursorOutsideGame: true,
                                      Keys.disableShakeToLocate: true, Keys.fillScreenInWindowedMode: true,
-                                     Keys.altTabSwitches: true])
+                                     Keys.altTabSwitches: true, Keys.fullResolutionWindowed: true])
         automaticSwitching = defaults.bool(forKey: Keys.automaticSwitching)
         freeCursorOutsideGame = defaults.bool(forKey: Keys.freeCursorOutsideGame)
         disableShakeToLocate = defaults.bool(forKey: Keys.disableShakeToLocate)
         shakeToLocateNeedsRestore = defaults.bool(forKey: Keys.shakeToLocateNeedsRestore)
         fillScreenInWindowedMode = defaults.bool(forKey: Keys.fillScreenInWindowedMode)
         altTabSwitches = defaults.bool(forKey: Keys.altTabSwitches)
+        fullResolutionWindowed = defaults.bool(forKey: Keys.fullResolutionWindowed)
         menuBarNeedsRestore = defaults.bool(forKey: Keys.menuBarNeedsRestore)
         dockNeedsRestore = defaults.bool(forKey: Keys.dockNeedsRestore)
         // 1.2.0 test builds changed League of Legends' game.cfg resolution: no longer.
