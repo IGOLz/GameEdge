@@ -47,16 +47,6 @@ final class AppSettings {
         didSet { defaults.set(dockNeedsRestore, forKey: Keys.dockNeedsRestore) }
     }
 
-    /// Content size of League of Legends' window in Windowed mode, measured while playing.
-    var leagueWindowedContentSize: [Int]? {
-        didSet { defaults.set(leagueWindowedContentSize, forKey: Keys.leagueWindowedContentSize) }
-    }
-
-    /// The resolution in game.cfg before GameEdge changed it, to put back.
-    var leagueOriginalResolution: [Int]? {
-        didSet { defaults.set(leagueOriginalResolution, forKey: Keys.leagueOriginalResolution) }
-    }
-
     var watchedApps: [WatchedApp] {
         didSet { save(watchedApps, forKey: Keys.watchedApps) }
     }
@@ -89,8 +79,6 @@ final class AppSettings {
         static let altTabSwitches = "altTabSwitches"
         static let menuBarNeedsRestore = "menuBarNeedsRestore"
         static let dockNeedsRestore = "dockNeedsRestore"
-        static let leagueWindowedContentSize = "leagueWindowedContentSize"
-        static let leagueOriginalResolution = "leagueOriginalResolution"
     }
 
     private init() {
@@ -105,8 +93,9 @@ final class AppSettings {
         altTabSwitches = defaults.bool(forKey: Keys.altTabSwitches)
         menuBarNeedsRestore = defaults.bool(forKey: Keys.menuBarNeedsRestore)
         dockNeedsRestore = defaults.bool(forKey: Keys.dockNeedsRestore)
-        leagueWindowedContentSize = defaults.array(forKey: Keys.leagueWindowedContentSize) as? [Int]
-        leagueOriginalResolution = defaults.array(forKey: Keys.leagueOriginalResolution) as? [Int]
+        // 1.2.0 test builds changed League of Legends' game.cfg resolution: no longer.
+        defaults.removeObject(forKey: "leagueWindowedContentSize")
+        defaults.removeObject(forKey: "leagueOriginalResolution")
         hasLaunchedBefore = defaults.bool(forKey: Keys.didFirstRun)
         customLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.customLayout)
         savedNormalLayout = Self.load(Arrangement.self, defaults: defaults, key: Keys.savedNormal)

@@ -339,9 +339,9 @@ struct GeneralView: View {
                                         set: { settings.altTabSwitches = $0; GameMode.shared.refresh() }))
                 RowDivider()
                 ToggleRow(symbol: "macwindow", color: .teal, title: "Fill the screen in Windowed mode",
-                          subtitle: "Hides the menu bar and Dock while a game runs and covers the window's title bar in black. In Windowed mode the game then looks borderless and stays visible when you switch apps. For League of Legends, GameEdge also sets the matching resolution in game.cfg between matches, so the picture isn't stretched.",
+                          subtitle: "Hides the menu bar and Dock while a game runs and covers the window's title bar in black. In Windowed mode the game then looks borderless and stays visible when you switch apps.",
                           isOn: Binding(get: { settings.fillScreenInWindowedMode },
-                                        set: { settings.fillScreenInWindowedMode = $0; GameMode.shared.leagueSettingsChanged() }))
+                                        set: { settings.fillScreenInWindowedMode = $0; GameMode.shared.refresh() }))
                 RowDivider()
                 ToggleRow(symbol: "cursorarrow.motionlines", color: .pink, title: "Don't enlarge the pointer",
                           subtitle: "Turns off Shake to Locate while you play, so fast mouse movements don't make the pointer bigger.",
