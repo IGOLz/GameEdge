@@ -154,7 +154,9 @@ final class GameMode {
     }
 
     func noteWindowedContentSize(_ size: CGSize) {
-        guard runningGame?.id == WatchedApp.leagueOfLegends.id, size.width > 0, size.height > 0 else { return }
+        // Only once the menu bar and Dock are hidden: the window grows right after.
+        guard runningGame?.id == WatchedApp.leagueOfLegends.id, size.width > 0, size.height > 0,
+              ScreenChrome.menuBarAutoHides, ScreenChrome.dockAutoHides else { return }
         let measured = [Int(size.width.rounded()), Int(size.height.rounded())]
         if settings.leagueWindowedContentSize != measured {
             settings.leagueWindowedContentSize = measured
