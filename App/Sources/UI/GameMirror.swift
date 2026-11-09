@@ -34,7 +34,10 @@ final class GameMirror {
     private var virtualID: CGDirectDisplayID = 0
     private var panel: MirrorPanel?
     private var stream: SCStream?
-    private let output = MirrorOutput()
+    private var output: MirrorOutput?
+    private var generation = UUID()
+    private var updatingCapture: UUID?
+    private var capturedWindowID: CGWindowID?
     private var capturedWindowSize = CGSize.zero
     private var timer: Timer?
     private var content: CGRect?
@@ -123,7 +126,11 @@ final class GameMirror {
         isRunning = true
         Log.write("full resolution on: virtual display \(width)×\(height) @ \(Int(refresh)) Hz")
 
-        showPanel(on: main)
+        generation = UUID()
+        guard showPanel(on: main) else {
+            stop()
+            return
+        }
         // The display needs a moment to come online before it can be arranged.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
@@ -134,12 +141,18 @@ final class GameMirror {
     func stop() {
         guard isRunning else { return }
         isRunning = false
+        generation = UUID()
+        updatingCapture = nil
         timer?.invalidate()
         timer = nil
         if let stream { Task { try? await stream.stopCapture() } }
         stream = nil
+        output?.renderer.stop()
+        output = nil
+        capturedWindowID = nil
         capturedWindowSize = .zero
         panel?.orderOut(nil)
+        panel = nil
         let main = CGDisplayBounds(CGMainDisplayID())
         if CGDisplayBounds(virtualID).contains(cursorLocation) {
             CGWarpMouseCursorPosition(CGPoint(x: main.midX, y: main.midY))
@@ -239,11 +252,15 @@ final class GameMirror {
     }
 
     private func updateCapture() async {
-        guard isRunning, let game else { return }
+        guard isRunning, updatingCapture == nil, let game, let output else { return }
+        let session = generation
+        updatingCapture = session
+        defer { if updatingCapture == session { updatingCapture = nil } }
         let shareable: SCShareableContent
         do {
             shareable = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         } catch {
+            guard isRunning, generation == session else { return }
             if !didAskForScreenRecording {
                 didAskForScreenRecording = true
                 Log.write("full resolution: Screen Recording access needed (\(error.localizedDescription))")
@@ -253,25 +270,37 @@ final class GameMirror {
             }
             return
         }
-        guard let window = shareable.windows
+        guard isRunning, generation == session,
+              let window = shareable.windows
                 .filter({ $0.owningApplication?.processID == game.processIdentifier && $0.windowLayer == 0 })
                 .max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { return }
-        guard isRunning, window.frame.size != capturedWindowSize else { return }
+        guard window.frame.size != capturedWindowSize || window.windowID != capturedWindowID else { return }
         let configuration = streamConfiguration(for: window)
         do {
             if let stream {
+                if capturedWindowID != window.windowID {
+                    try await stream.updateContentFilter(SCContentFilter(desktopIndependentWindow: window))
+                    guard isRunning, generation == session else { return }
+                }
                 try await stream.updateConfiguration(configuration)
             } else {
                 let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: window),
                                       configuration: configuration, delegate: output)
                 try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: output.queue)
                 try await stream.startCapture()
+                guard isRunning, generation == session else {
+                    try? await stream.stopCapture()
+                    return
+                }
                 self.stream = stream
             }
+            guard isRunning, generation == session else { return }
             capturedWindowSize = window.frame.size
+            capturedWindowID = window.windowID
             panel?.mirrorView.showMessage(nil)
             Log.write("full resolution: showing \(Int(window.frame.width))×\(Int(window.frame.height - titleBar))")
         } catch {
+            guard isRunning, generation == session else { return }
             Log.write("full resolution: capture failed (\(error.localizedDescription)); Screen Recording access may be needed")
         }
     }
@@ -283,25 +312,36 @@ final class GameMirror {
         configuration.width = Int(picture.width)
         configuration.height = Int(picture.height)
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
-        let refresh = CGDisplayCopyDisplayMode(CGMainDisplayID())?.refreshRate ?? 60
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(max(refresh, 60).rounded()))
-        configuration.queueDepth = 4
+        // Native capture cadence, including fractional refresh rates and ProMotion.
+        configuration.minimumFrameInterval = .zero
+        // This is a surface pool, not a playback FIFO. Two retained frames plus a
+        // pending frame still leave surfaces free for the capture producer.
+        configuration.queueDepth = 5
         configuration.showsCursor = true
         return configuration
     }
 
     // MARK: Panel
 
-    private func showPanel(on display: CGDirectDisplayID) {
+    private func showPanel(on display: CGDirectDisplayID) -> Bool {
         guard let screen = NSScreen.screens.first(where: {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
-        }) else { return }
-        let panel = self.panel ?? MirrorPanel()
+        }) else { return false }
+        let panel = MirrorPanel()
+        let renderer = MirrorRenderer(layer: panel.mirrorView.videoLayer) { message in
+            DispatchQueue.main.async { Log.write(message) }
+        }
         self.panel = panel
         panel.mirrorView.onClick = { [weak self] in self?.clickedPicture() }
-        output.layer = panel.mirrorView.layer
+        let session = generation
+        output = MirrorOutput(renderer: renderer) { [weak self] message in
+            guard let self, self.generation == session else { return }
+            Log.write("full resolution: capture stopped (\(message))")
+            self.stop()
+        }
         panel.setFrame(screen.frame, display: true)
         panel.orderFrontRegardless()
+        return true
     }
 
     // MARK: Geometry
@@ -355,32 +395,26 @@ final class GameMirror {
     }
 }
 
-/// Receives frames on its own queue and hands the IOSurface to the panel's layer (no copy).
+/// Each stream owns its output; callbacks from a stopped session can't update a new one.
 private nonisolated final class MirrorOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     let queue = DispatchQueue(label: "dev.igol.GameEdge.mirror", qos: .userInteractive)
-    nonisolated(unsafe) weak var layer: CALayer?
+    let renderer: MirrorRenderer
+    let onStop: @MainActor @Sendable (String) -> Void
+
+    init(renderer: MirrorRenderer, onStop: @escaping @MainActor @Sendable (String) -> Void) {
+        self.renderer = renderer
+        self.onStop = onStop
+    }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .screen, let buffer = sampleBuffer.imageBuffer,
-              let surface = CVPixelBufferGetIOSurface(buffer)?.takeUnretainedValue() else { return }
-        let box = SurfaceBox(surface: surface, layer: layer)
-        DispatchQueue.main.async {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            box.layer?.contents = box.surface
-            CATransaction.commit()
-        }
+        guard type == .screen else { return }
+        renderer.submit(sampleBuffer)
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         let message = error.localizedDescription
-        DispatchQueue.main.async { Log.write("full resolution: capture stopped (\(message))") }
+        DispatchQueue.main.async { self.onStop(message) }
     }
-}
-
-private nonisolated struct SurfaceBox: @unchecked Sendable {
-    let surface: IOSurface
-    weak var layer: CALayer?
 }
 
 /// Black, borderless, non-activating, above the menu bar and the Dock.
@@ -396,9 +430,6 @@ private final class MirrorPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        mirrorView.wantsLayer = true
-        mirrorView.layer?.backgroundColor = NSColor.black.cgColor
-        mirrorView.layer?.contentsGravity = .resizeAspect
         contentView = mirrorView
     }
 
@@ -408,8 +439,19 @@ private final class MirrorPanel: NSPanel {
 }
 
 private final class MirrorView: NSView {
+    var videoLayer: CALayer { layer! }
     var onClick: (() -> Void)?
     private var message: NSTextField?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        videoLayer.isOpaque = true
+        videoLayer.backgroundColor = NSColor.black.cgColor
+        videoLayer.contentsGravity = .resizeAspect
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     /// A centred explanation over the black picture (nil hides it).
     func showMessage(_ title: String?, detail: String = "") {

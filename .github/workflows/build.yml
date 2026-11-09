@@ -33,5 +33,11 @@ jobs:
       - name: Layout checks
         run: swiftc -O -parse-as-library App/Sources/Core/DisplayLayout.swift Tests/LayoutChecks.swift -o build/layout-checks && build/layout-checks
 
+      - name: Frame delivery checks
+        run: swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrameChecks.swift -o build/frame-checks && build/frame-checks
+
+      - name: Latency analysis checks
+        run: python3 -B Tests/MirrorLatencyChecks.py
+
       - name: Homebrew checks
         run: python3 -I Tests/HomebrewChecks.py

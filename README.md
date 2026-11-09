@@ -105,13 +105,30 @@ cd GameEdge
 | `App/Sources/App` | Launch, menu bar, main window, updates |
 | `App/Sources/Core` | Display geometry and arrangement (`DisplayLayout.swift`), game detection, layout switching, settings |
 | `App/Sources/UI` | Main window pages and the design system |
-| `Tests/` | Layout, Homebrew and release automation checks |
+| `Tests/` | Layout, frame delivery, Homebrew and release automation checks; optional live latency probe |
 | `scripts/` | Dev app, install, release, DMG, Homebrew, icon and screenshot scripts |
-| `docs/` | [Updates](docs/Updates.md) and [release issues](docs/ReleaseIssues.md) |
+| `docs/` | [Updates](docs/Updates.md), [release issues](docs/ReleaseIssues.md), and [latency investigation](docs/Latency.html) |
 
 ```sh
 swiftc -parse-as-library App/Sources/Core/DisplayLayout.swift Tests/LayoutChecks.swift -o build/layout-checks && build/layout-checks
+swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrameChecks.swift -o build/frame-checks && build/frame-checks
 ```
+
+Frame delivery keeps only the latest pending image when the UI is busy. Capture startup is serialized, and callbacks from an old session cannot update a new one. The capture surface pool contains five buffers so retaining the displayed samples does not starve the producer; it is not a five-frame playback queue. Capture follows the source display's native cadence, including ProMotion.
+
+These changes prevent avoidable backlog; they do **not** eliminate capture and compositor latency. `callback-to-commit` in the local log measures only GameEdge's delivery work, not onscreen presentation or mouse-to-photon latency. `superseded` counts pending samples replaced under backpressure, not all frames lost anywhere in the pipeline.
+
+This branch is an experiment, not a released latency fix. The live comparisons did not demonstrate an improvement, and the installed application was restored to 1.3.0. See the [measurements and limitations](docs/Latency.html).
+
+For an observational comparison while League and GameEdge are running, with Screen Recording access for the test executable:
+
+```sh
+swiftc -O -parse-as-library Tests/MirrorLatencyProbe.swift -o build/mirror-probe
+build/mirror-probe build/latency.json 20
+python3 Tests/MirrorLatencyAnalyze.py build/latency.json
+```
+
+The probe stores sampled RGB fingerprints and WindowServer timestamps locally, not video. Its two observer streams add load and have independent sampling phases. Static or ambiguous images are discarded. These timings are useful for rejecting unsuccessful approaches; use a controlled workload and optical measurement before claiming an end-to-end latency improvement.
 
 </details>
 
