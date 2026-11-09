@@ -117,7 +117,7 @@ swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrame
 
 The experimental Metal renderer keeps the newest pending image and uses `CAMetalDisplayLink` for presentation. Capture startup is serialized, and callbacks from an old session cannot update a new one. Samples and Core Video texture wrappers stay alive until the GPU finishes reading them. The five capture buffers form a surface pool, not a playback FIFO.
 
-The continuous Metal mirror did not recover smoothness. The new native League path bypasses it while playing and uses `CGSHWCaptureWindowList` only in the background. Live checks observed native monitor cadence with GameEdge enabled, and the user confirmed recovered fluidity. This candidate is installed locally, not published as a release. The private background API still needs validation on other macOS versions and hardware. See the [evidence and limitations](docs/FramePacing.html).
+The continuous Metal mirror did not recover smoothness. The new native League path bypasses it while playing and uses `CGSHWCaptureWindowList` only in the background. Live checks observed native monitor cadence with GameEdge enabled, and the user confirmed recovered fluidity. This is the League presentation path introduced in 1.4.0. The private background API still needs validation on other macOS versions and hardware. See the [evidence and limitations](docs/FramePacing.html).
 
 The original latency probe assumed BGRA even though ScreenCaptureKit delivered planar 420v. Its historical fingerprint results must not be used as RGB evidence or end-to-end latency measurements. Both probes now request and validate BGRA explicitly.
 

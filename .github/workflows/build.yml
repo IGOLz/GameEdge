@@ -33,6 +33,13 @@ jobs:
       - name: Layout checks
         run: swiftc -O -parse-as-library App/Sources/Core/DisplayLayout.swift Tests/LayoutChecks.swift -o build/layout-checks && build/layout-checks
 
+      - name: Native presentation checks
+        run: |
+          swiftc -O -parse-as-library App/Sources/Core/GameWindowPresentation.swift Tests/GameWindowPresentationChecks.swift -o build/presentation-checks
+          build/presentation-checks
+          swiftc -O Tests/HiddenWindowProbe.swift -o build/hidden-window-probe
+          build/hidden-window-probe --self-test
+
       - name: Frame delivery checks
         run: swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrameChecks.swift -o build/frame-checks && build/frame-checks
 
