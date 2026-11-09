@@ -46,16 +46,17 @@ final class Output: NSObject, SCStreamOutput, @unchecked Sendable {
         let titleBar = NSWindow.frameRect(forContentRect: CGRect(x: 0, y: 0, width: 100, height: 100),
             styleMask: [.titled, .closable, .miniaturizable]).height - 100
         let share = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        guard let game = share.windows.filter({ $0.owningApplication?.bundleIdentifier == bundle && $0.windowLayer == 0 }).max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }),
+        guard let game = share.windows.filter({ $0.owningApplication?.bundleIdentifier == bundle && $0.frame.width >= 800 && $0.frame.height >= 600 && $0.title == "League of Legends (TM) Client" }).max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }),
               let main = share.displays.first(where: { $0.displayID == CGMainDisplayID() }) else { throw NSError(domain: "Probe", code: 2) }
         print("source", game.windowID, game.frame, "physical display", main.displayID, main.frame, "mode", mode)
+        let cropTop = game.windowLayer == 0 ? titleBar : 0
         let output = Output()
         var streams = [SCStream]()
         for i in (mode == "display" ? [1] : mode == "source" ? [0] : [0, 1]) {
             let c = SCStreamConfiguration()
             c.width = 320; c.height = 180; c.showsCursor = false
             c.pixelFormat = kCVPixelFormatType_32BGRA
-            c.sourceRect = i == 0 ? CGRect(x: 0, y: titleBar, width: game.frame.width, height: game.frame.height - titleBar) : CGRect(origin: .zero, size: main.frame.size)
+            c.sourceRect = i == 0 ? CGRect(x: 0, y: cropTop, width: game.frame.width, height: game.frame.height - cropTop) : CGRect(origin: .zero, size: main.frame.size)
             c.minimumFrameInterval = .zero; c.queueDepth = 3
             c.colorSpaceName = CGColorSpace.sRGB
             let filter = i == 0 ? SCContentFilter(desktopIndependentWindow: game) : SCContentFilter(display: main, excludingWindows: [])

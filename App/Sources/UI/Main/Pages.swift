@@ -338,8 +338,8 @@ struct GeneralView: View {
                           isOn: Binding(get: { settings.altTabSwitches },
                                         set: { settings.altTabSwitches = $0; GameMode.shared.refresh() }))
                 RowDivider()
-                ToggleRow(symbol: "rectangle.inset.filled", color: .blue, title: "Full resolution in Windowed mode",
-                          subtitle: "Runs a windowed game at the display's full resolution on an invisible extra display and shows it on the main one without its title bar, so the picture keeps the right shape and stays live when you switch apps. Needs Accessibility and Screen Recording access.",
+                ToggleRow(symbol: "rectangle.inset.filled", color: .blue, title: "Full resolution and background picture",
+                          subtitle: "For League of Legends, choose Borderless: the game draws directly while you play and stays visible when you switch apps. Windowed games use a video mirror, which can reduce fluidity. Needs Accessibility and Screen Recording access.",
                           isOn: Binding(get: { settings.fullResolutionWindowed },
                                         set: { settings.fullResolutionWindowed = $0; GameMode.shared.refresh() }))
                 if settings.fullResolutionWindowed, !GameMirror.hasScreenRecording {

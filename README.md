@@ -25,7 +25,7 @@
 </p>
 
 > [!NOTE]
-> GameEdge is an independent open-source project and is **not affiliated with Riot Games**. It never touches the game: it only changes how macOS arranges your displays.
+> GameEdge is an independent open-source project and is **not affiliated with Riot Games**. It does not inject code into the game or change game files. It arranges displays and supplies a background game preview.
 
 ## Why
 
@@ -57,7 +57,8 @@ To update through Homebrew instead, run `brew update` followed by `brew upgrade 
 
 ## Features
 
-- **Full resolution in Windowed mode** (the recommended way to play): set League of Legends to *Windowed* at your display's resolution. GameEdge runs the game on an invisible extra display a little taller than yours, so it renders at full resolution, and shows its picture live on the main display without the title bar: a true 2560×1440, 16:9 picture that, unlike *Borderless*, **stays visible when you switch apps**. While you play the cursor lives on that invisible display, which touches the others only at a corner, so it can't slip out; when you leave the game it comes back to the same point of the main display, and clicking the picture takes you back. The picture adds about one frame of delay.
+- **Native League of Legends gameplay**: choose *Borderless* at your display's resolution. The game renders directly while you play. When you switch apps, GameEdge displays a live background picture at up to 30 fps; clicking it returns to the game and stops capture. This avoids the continuous video mirror that reduced gameplay smoothness. The background picture needs Accessibility and Screen Recording permissions and uses a private macOS capture API, validated on the current test Mac.
+- **Windowed compatibility**: the virtual-display mirror remains available for windowed games. It fills the display and stays visible in the background, but may reduce fluidity. For League, use *Borderless*.
 - **Automatic**: when a League of Legends match starts, the displays beside the game display move up into its corners. When the match ends, they go back. The client and lobby don't count, only the match.
 - **⌘Tab works like on Windows**: switch to another app and the displays go back side by side, so the cursor moves freely while the game keeps running. Return to the game and its layout comes back, with the cursor on the game display.
 - **⌥Tab works like ⌘Tab** while a game runs, like Alt+Tab on Windows: from the game to the app you used last, and back.
@@ -80,7 +81,7 @@ The game display is your main display, the one with the menu bar. GameEdge never
 
 ## Privacy
 
-No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts and which app is in front. While a game runs it changes, and then restores exactly as they were, *Shake mouse pointer to locate* (Accessibility › Display › Pointer) and the automatic hiding of the menu bar and the Dock. With full resolution in Windowed mode it captures the game window with ScreenCaptureKit only to draw it on your main display: nothing is recorded, saved or sent anywhere. It keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
+No analytics, no tracking, no account. GameEdge connects to the internet only to **check for updates** on GitHub (`github.com/IGOLz/GameEdge/releases`), at launch and once a day unless you turn it off. It reads the list of running processes to notice when a game starts and which app is in front. While a game runs it changes, and then restores exactly as they were, *Shake mouse pointer to locate* (Accessibility › Display › Pointer) and the automatic hiding of the menu bar and the Dock. The native League path captures only its inactive window using SkyLight; the windowed compatibility path uses ScreenCaptureKit. These images are displayed locally and are never recorded, saved or sent anywhere. It keeps a log of layout changes in `~/Library/Logs/GameEdge.log`. Settings are stored in the app's preferences.
 
 ## Build from source
 
@@ -116,7 +117,7 @@ swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrame
 
 The experimental Metal renderer keeps the newest pending image and uses `CAMetalDisplayLink` for presentation. Capture startup is serialized, and callbacks from an old session cannot update a new one. Samples and Core Video texture wrappers stay alive until the GPU finishes reading them. The five capture buffers form a surface pool, not a playback FIFO.
 
-This branch is an experiment, not a released frame-pacing fix. The live comparisons and the user's test did not demonstrate recovered smoothness. The original 1.3.0 application was restored on disk and stopped while preparing native-window tests. See the [evidence and limitations](docs/FramePacing.html).
+The continuous Metal mirror did not recover smoothness. The new native League path bypasses it while playing and uses `CGSHWCaptureWindowList` only in the background. Live checks observed native monitor cadence with GameEdge enabled, and the user confirmed recovered fluidity. This candidate is installed locally, not published as a release. The private background API still needs validation on other macOS versions and hardware. See the [evidence and limitations](docs/FramePacing.html).
 
 The original latency probe assumed BGRA even though ScreenCaptureKit delivered planar 420v. Its historical fingerprint results must not be used as RGB evidence or end-to-end latency measurements. Both probes now request and validate BGRA explicitly.
 

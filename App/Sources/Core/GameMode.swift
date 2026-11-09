@@ -89,6 +89,7 @@ final class GameMode {
     func stop() {
         if isActive { restoreNormalLayout(reason: "GameEdge quit") }
         GameMirror.shared.stop()
+        NativeGamePreview.shared.stop()
         WindowedGameBands.shared.follow(nil)
         restoreScreenChrome()
     }
@@ -100,14 +101,30 @@ final class GameMode {
             if let game { Log.write("\(game.name) started") } else if let runningGame { Log.write("\(runningGame.name) quit") }
             runningGame = game
         }
-        // Full resolution for a game in Windowed mode (virtual display + live picture).
+        // League draws natively; windowed games retain the virtual-display mirror.
         let gameApp = game.flatMap(GameDetector.runningApplication(for:))
         let mirror = GameMirror.shared
+        let wasMirroring = mirror.isRunning
+        let isLeague = gameApp?.bundleIdentifier == WatchedApp.leagueOfLegends.id
+        let previousPresentation: GameWindowPresentation = wasMirroring ? .windowed : NativeGamePreview.shared.isRunning ? .native : .unknown
+        var presentation = GameWindowPresentation.unknown
+        if isLeague, let gameApp {
+            presentation = GameMirror.leaguePresentation(pid: gameApp.processIdentifier).retaining(previousPresentation)
+            // Preserve the original Accessibility request for new windowed installations.
+            if !GameMirror.hasAccessibility, GameMirror.isWindowed(pid: gameApp.processIdentifier) {
+                presentation = .windowed
+            }
+        }
+        let nativeLeague = isLeague && presentation == .native
+        NativeGamePreview.shared.follow(settings.automaticSwitching && settings.fullResolutionWindowed && nativeLeague ? gameApp : nil)
         if let gameApp, settings.automaticSwitching, settings.fullResolutionWindowed,
-           mirror.isRunning || GameMirror.isWindowed(pid: gameApp.processIdentifier) {
+           isLeague ? presentation == .windowed : (mirror.isRunning || GameMirror.isWindowed(pid: gameApp.processIdentifier)) {
             mirror.start(game: gameApp)
         } else {
             mirror.stop()
+        }
+        if wasMirroring != mirror.isRunning, isActive, !isManual {
+            restoreNormalLayout(reason: "Game window mode changed")
         }
         if let game, settings.automaticSwitching {
             let inGame = !settings.freeCursorOutsideGame || (GameDetector.isFrontmost(game) ?? true)
@@ -138,7 +155,7 @@ final class GameMode {
         let playing = game != nil && settings.automaticSwitching
         if playing, settings.fillScreenInWindowedMode {
             hideScreenChrome()
-            WindowedGameBands.shared.follow(mirror.isRunning ? nil : gameApp)
+            WindowedGameBands.shared.follow(mirror.isRunning || nativeLeague ? nil : gameApp)
         } else {
             WindowedGameBands.shared.follow(nil)
             restoreScreenChrome()

@@ -70,6 +70,21 @@ final class GameMirror {
         }
     }
 
+    static func leaguePresentation(pid: pid_t) -> GameWindowPresentation {
+        guard AXIsProcessTrusted() else { return .unknown }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement] else { return .unknown }
+        for window in windows {
+            var title: CFTypeRef?, subrole: CFTypeRef?
+            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
+            guard title as? String == "League of Legends (TM) Client" else { continue }
+            AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subrole)
+            return .league(subrole: subrole as? String)
+        }
+        return .unknown
+    }
+
     // MARK: Lifecycle
 
     func start(game: NSRunningApplication) {

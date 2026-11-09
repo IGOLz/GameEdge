@@ -1,0 +1,11 @@
+<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GameEdge: gioco nativo verificato</title><style>body{font:14px/1.5 system-ui;color:var(--foreground,#ddd);margin:0}h2{font-size:19px;margin:0 0 12px}p{margin:10px 0}.muted{color:var(--muted-foreground,#aaa);font-size:12px}svg{width:100%;height:155px}svg text{fill:var(--foreground,#ddd)}a{color:var(--primary,#75aaff)}</style>
+<h2>Fluidità recuperata con il gioco nativo</h2>
+<p>LoL resta in <b>Senza bordi</b> a 2560×1440. Durante il gioco GameEdge non cattura né ridisegna le immagini. Quando passi a un'altra app, avvia l'anteprima live; appena torni, la ferma.</p>
+<svg viewBox="0 0 700 155" role="img" aria-label="Cambiamenti osservati sul display: finestra normale 162 al secondo, nuova modalità 164 al secondo">
+<text x="0" y="34">Finestra normale</text><rect x="220" y="15" width="393" height="27" rx="4" fill="var(--chart-1,#7b97d9)"/><text x="623" y="34">162/s</text>
+<text x="0" y="92">GameEdge, gioco nativo</text><rect x="220" y="73" width="398" height="27" rx="4" fill="var(--chart-2,#54b6a3)"/><text x="628" y="92">164/s</text>
+<text x="220" y="142" font-size="11">0</text><text x="460" y="142" font-size="11">100</text><text x="600" y="142" font-size="11">165</text></svg>
+<p class="muted">Sonda BGRA del display fisico, circa 15 secondi per prova, monitor a 165 Hz. Sono cambiamenti dei pixel osservati dal compositore, non misure ottiche di latenza. Scene non identiche: il confronto verifica il recupero della cadenza, non un vantaggio prestazionale di 2 fps.</p>
+<p>Verificati anteprima in background a circa 30 aggiornamenti/s, ritorno al gioco cliccando l'immagine e ripristino della disposizione dei tre monitor. L'utente ha confermato: «Sì, ora è fluido».</p>
+<p class="muted">La cattura in background usa un'API privata macOS, con controllo di disponibilità. Verificata su questo Mac; compatibilità con altri Mac e versioni di macOS ancora da provare. Build universale arm64/x86_64. Versione installata localmente, nessuna nuova release pubblicata.</p>
+</html>

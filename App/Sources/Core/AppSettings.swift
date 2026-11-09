@@ -33,7 +33,7 @@ final class AppSettings {
         didSet { defaults.set(fillScreenInWindowedMode, forKey: Keys.fillScreenInWindowedMode) }
     }
 
-    /// Windowed games at full resolution through a virtual display (see GameMirror).
+    /// Native League background preview, or full-resolution mirror for windowed games.
     var fullResolutionWindowed: Bool {
         didSet { defaults.set(fullResolutionWindowed, forKey: Keys.fullResolutionWindowed) }
     }
