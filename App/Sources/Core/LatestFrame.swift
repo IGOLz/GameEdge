@@ -37,6 +37,16 @@ nonisolated final class LatestFrame<Value: Sendable>: @unchecked Sendable {
         pending = nil
     }
 
+    /// After waiting for a drawable, use the freshest sample without releasing the worker.
+    func newest(or fallback: Value) -> Value? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !stopped else { return nil }
+        defer { pending = nil }
+        if pending != nil { replacements += 1 }
+        return pending ?? fallback
+    }
+
     func takeReplacementCount() -> Int {
         lock.lock()
         defer { lock.unlock() }

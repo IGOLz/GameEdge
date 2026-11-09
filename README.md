@@ -107,28 +107,29 @@ cd GameEdge
 | `App/Sources/UI` | Main window pages and the design system |
 | `Tests/` | Layout, frame delivery, Homebrew and release automation checks; optional live latency probe |
 | `scripts/` | Dev app, install, release, DMG, Homebrew, icon and screenshot scripts |
-| `docs/` | [Updates](docs/Updates.md), [release issues](docs/ReleaseIssues.md), and [latency investigation](docs/Latency.html) |
+| `docs/` | [Updates](docs/Updates.md), [release issues](docs/ReleaseIssues.md), and [frame pacing investigation](docs/FramePacing.html) |
 
 ```sh
 swiftc -parse-as-library App/Sources/Core/DisplayLayout.swift Tests/LayoutChecks.swift -o build/layout-checks && build/layout-checks
 swiftc -O -parse-as-library App/Sources/Core/LatestFrame.swift Tests/LatestFrameChecks.swift -o build/frame-checks && build/frame-checks
 ```
 
-Frame delivery keeps only the latest pending image when the UI is busy. Capture startup is serialized, and callbacks from an old session cannot update a new one. The capture surface pool contains five buffers so retaining the displayed samples does not starve the producer; it is not a five-frame playback queue. Capture follows the source display's native cadence, including ProMotion.
+The experimental Metal renderer keeps the newest pending image and uses `CAMetalDisplayLink` for presentation. Capture startup is serialized, and callbacks from an old session cannot update a new one. Samples and Core Video texture wrappers stay alive until the GPU finishes reading them. The five capture buffers form a surface pool, not a playback FIFO.
 
-These changes prevent avoidable backlog; they do **not** eliminate capture and compositor latency. `callback-to-commit` in the local log measures only GameEdge's delivery work, not onscreen presentation or mouse-to-photon latency. `superseded` counts pending samples replaced under backpressure, not all frames lost anywhere in the pipeline.
+This branch is an experiment, not a released frame-pacing fix. The live comparisons and the user's test did not demonstrate recovered smoothness. The original 1.3.0 application was restored on disk and stopped while preparing native-window tests. See the [evidence and limitations](docs/FramePacing.html).
 
-This branch is an experiment, not a released latency fix. The live comparisons did not demonstrate an improvement, and the installed application was restored to 1.3.0. See the [measurements and limitations](docs/Latency.html).
+The original latency probe assumed BGRA even though ScreenCaptureKit delivered planar 420v. Its historical fingerprint results must not be used as RGB evidence or end-to-end latency measurements. Both probes now request and validate BGRA explicitly.
 
-For an observational comparison while League and GameEdge are running, with Screen Recording access for the test executable:
+For a physical-display observation while League is running, with Screen Recording access for the test executable:
 
 ```sh
-swiftc -O -parse-as-library Tests/MirrorLatencyProbe.swift -o build/mirror-probe
-build/mirror-probe build/latency.json 20
-python3 Tests/MirrorLatencyAnalyze.py build/latency.json
+swiftc -O -parse-as-library Tests/FramePacingProbe.swift -o build/pacing-probe
+build/pacing-probe build/pacing.json 20 display
+python3 -B Tests/FramePacingAnalyze.py build/pacing.json --summary
+python3 -B Tests/FramePacingChecks.py
 ```
 
-The probe stores sampled RGB fingerprints and WindowServer timestamps locally, not video. Its two observer streams add load and have independent sampling phases. Static or ambiguous images are discarded. These timings are useful for rejecting unsuccessful approaches; use a controlled workload and optical measurement before claiming an end-to-end latency improvement.
+`source` observes only the game window; `pair` observes source and physical display concurrently. Start with a single observer to limit its load. The probe stores sampled pixel values and WindowServer timestamps locally. Its independent sampling, scene motion and capture overhead limit interpretation. Neither a software capture nor `CAMetalDrawable.presentedTime` alone establishes mouse-to-photon latency. Compare scene, render dimensions, focus and observer load before claiming a performance improvement.
 
 </details>
 

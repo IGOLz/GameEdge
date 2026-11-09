@@ -16,6 +16,16 @@ struct LatestFrameChecks {
         precondition(frames.take() == nil)
         precondition(!frames.offer(10_002), "Late callbacks after stop must be ignored")
 
+        let drawableWait = LatestFrame<Int>()
+        precondition(drawableWait.offer(1))
+        precondition(drawableWait.take() == 1)
+        precondition(!drawableWait.offer(2))
+        precondition(drawableWait.newest(or: 1) == 2)
+        precondition(drawableWait.newest(or: 2) == 2)
+        precondition(!drawableWait.offer(3), "Refreshing a sample must not release the worker")
+        drawableWait.stop()
+        precondition(drawableWait.newest(or: 3) == nil)
+
         // Race producers with a consumer, including the transition from busy to idle.
         let concurrent = LatestFrame<Int>()
         let worker = DispatchQueue(label: "consumer")

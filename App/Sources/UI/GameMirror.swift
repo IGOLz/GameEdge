@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import QuartzCore
 import ScreenCaptureKit
+import Metal
 
 /// Full resolution for games in Windowed mode.
 ///
@@ -287,16 +288,21 @@ final class GameMirror {
                 let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: window),
                                       configuration: configuration, delegate: output)
                 try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: output.queue)
+                Log.write("capture creating \(ObjectIdentifier(stream)) session=\(session)")
                 try await stream.startCapture()
                 guard isRunning, generation == session else {
                     try? await stream.stopCapture()
                     return
                 }
                 self.stream = stream
+                Log.write("capture started \(ObjectIdentifier(stream))")
             }
             guard isRunning, generation == session else { return }
             capturedWindowSize = window.frame.size
             capturedWindowID = window.windowID
+            if let video = panel?.mirrorView.videoLayer {
+                Log.write("Metal actual properties: transaction=\(video.presentsWithTransaction) sync=\(video.displaySyncEnabled) drawables=\(video.maximumDrawableCount), size=\(video.drawableSize) frame=\(video.frame) bounds=\(video.bounds) rasterize=\(video.shouldRasterize)")
+            }
             panel?.mirrorView.showMessage(nil)
             Log.write("full resolution: showing \(Int(window.frame.width))×\(Int(window.frame.height - titleBar))")
         } catch {
@@ -314,9 +320,8 @@ final class GameMirror {
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         // Native capture cadence, including fractional refresh rates and ProMotion.
         configuration.minimumFrameInterval = .zero
-        // This is a surface pool, not a playback FIFO. Two retained frames plus a
-        // pending frame still leave surfaces free for the capture producer.
         configuration.queueDepth = 5
+        configuration.colorSpaceName = CGColorSpace.sRGB
         configuration.showsCursor = true
         return configuration
     }
@@ -328,8 +333,14 @@ final class GameMirror {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
         }) else { return false }
         let panel = MirrorPanel()
-        let renderer = MirrorRenderer(layer: panel.mirrorView.videoLayer) { message in
-            DispatchQueue.main.async { Log.write(message) }
+        let renderer: MirrorRenderer
+        do {
+            renderer = try MirrorRenderer(layer: panel.mirrorView.videoLayer, refreshRate: Float(max(screen.maximumFramesPerSecond, 60))) { message in
+                DispatchQueue.main.async { Log.write(message) }
+            }
+        } catch {
+            Log.write("full resolution: Metal unavailable (\(error)); keeping the game in its window")
+            return false
         }
         self.panel = panel
         panel.mirrorView.onClick = { [weak self] in self?.clickedPicture() }
@@ -340,6 +351,7 @@ final class GameMirror {
             self.stop()
         }
         panel.setFrame(screen.frame, display: true)
+        panel.mirrorView.updateDrawableSize()
         panel.orderFrontRegardless()
         return true
     }
@@ -418,16 +430,15 @@ private nonisolated final class MirrorOutput: NSObject, SCStreamOutput, SCStream
 }
 
 /// Black, borderless, non-activating, above the menu bar and the Dock.
-private final class MirrorPanel: NSPanel {
+private final class MirrorPanel: NSWindow {
     let mirrorView = MirrorView()
 
     init() {
-        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        level = .popUpMenu
+        super.init(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+        level = .normal
         backgroundColor = .black
         isOpaque = true
         hasShadow = false
-        hidesOnDeactivate = false
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         contentView = mirrorView
@@ -439,19 +450,45 @@ private final class MirrorPanel: NSPanel {
 }
 
 private final class MirrorView: NSView {
-    var videoLayer: CALayer { layer! }
+    var videoLayer: CAMetalLayer { layer as! CAMetalLayer }
+
+    override var isOpaque: Bool { true }
+    override func makeBackingLayer() -> CALayer { CAMetalLayer() }
     var onClick: (() -> Void)?
     private var message: NSTextField?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        videoLayer.device = MTLCreateSystemDefaultDevice()
+        videoLayer.pixelFormat = .bgra8Unorm
+        videoLayer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
+        videoLayer.framebufferOnly = true
+        videoLayer.maximumDrawableCount = 3
+        videoLayer.presentsWithTransaction = false
+        videoLayer.displaySyncEnabled = true
         videoLayer.isOpaque = true
         videoLayer.backgroundColor = NSColor.black.cgColor
-        videoLayer.contentsGravity = .resizeAspect
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        updateDrawableSize()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateDrawableSize()
+    }
+
+    func updateDrawableSize() {
+        let size = convertToBacking(bounds).size
+        guard size.width > 0, size.height > 0 else { return }
+        videoLayer.contentsScale = window?.backingScaleFactor ?? 1
+        videoLayer.drawableSize = size
+    }
 
     /// A centred explanation over the black picture (nil hides it).
     func showMessage(_ title: String?, detail: String = "") {

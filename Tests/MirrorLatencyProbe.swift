@@ -14,7 +14,8 @@ final class Output: NSObject, SCStreamOutput, @unchecked Sendable {
     func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {
         guard let a = (CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]])?.first,
               a[.status] as? Int == SCFrameStatus.complete.rawValue,
-              let stamp = a[.displayTime] as? UInt64, let b = sample.imageBuffer else { return }
+              let stamp = a[.displayTime] as? UInt64, let b = sample.imageBuffer,
+              !CVPixelBufferIsPlanar(b), CVPixelBufferGetPixelFormatType(b) == kCVPixelFormatType_32BGRA else { return }
         CVPixelBufferLockBaseAddress(b, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(b, .readOnly) }
         guard let p = CVPixelBufferGetBaseAddress(b)?.assumingMemoryBound(to: UInt8.self) else { return }
@@ -50,6 +51,7 @@ final class Output: NSObject, SCStreamOutput, @unchecked Sendable {
         for (i, w) in [game, mirror].enumerated() {
             let c = SCStreamConfiguration()
             c.width = 320; c.height = 180; c.showsCursor = false
+            c.pixelFormat = kCVPixelFormatType_32BGRA
             c.sourceRect = CGRect(x: 0, y: i == 0 ? titleBar : 0, width: w.frame.width, height: w.frame.height - (i == 0 ? titleBar : 0))
             c.minimumFrameInterval = .zero; c.queueDepth = 3
             c.colorSpaceName = CGColorSpace.sRGB
